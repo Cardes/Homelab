@@ -1,0 +1,23 @@
+version: "3.5"
+
+volumes:
+  pihole-etc:
+    driver: local
+
+services:
+  pihole:
+    container_name: pihole
+    image: pihole/pihole:latest
+    restart: always
+    ports:
+      - "192.168.11.44:53:53/tcp"
+      - "192.168.11.44:53:53/udp"
+      - "192.168.11.44:67:67/udp"
+      - "192.168.11.44:8080:80/tcp"
+    #  - "443:443/tcp"
+    environment:
+      TZ: 'Europe/Berlin'
+      WEBPASSWORD: ${PIHOLE_PASSWORD}
+    volumes:
+     - './etc-pihole/:/etc/pihole/'
+     - './etc-dnsmasq.d/:/etc/dnsmasq.d/'
