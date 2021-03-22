@@ -1,0 +1,25 @@
+version: '2'
+services:
+  factorio:
+    build: .
+    restart: unless-stopped
+    container_name: factorio
+    ports:
+     - "34197:34197/udp"
+    volumes:
+     - factorio:/factorio
+    networks:
+     - games-net
+    environment:
+      - UPDATE_MODS_ON_START=true
+      - USERNAME=cardes
+      - TOKEN=this-should-also-be-changed-asap
+volumes:
+  factorio:
+    driver: local
+networks:
+  games-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.24.4.0/24
