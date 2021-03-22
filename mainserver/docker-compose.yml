@@ -1,0 +1,208 @@
+version: "3.5"
+
+volumes:
+  gitea:
+    driver: local
+  grafana-data:
+    driver: local
+  influxdb-data:
+    driver: local
+  mysql-data:
+    driver: local
+  nextcloud:
+    driver: local
+  pihole-etc:
+    driver: local
+  redis_data:
+    driver: local
+  statping_data:
+    driver: local
+
+networks:
+
+  home-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.23.3.0/24
+  mysql-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.1.0/24
+  monitor-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.2.0/24
+  redis-net:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.120.12.0/24
+
+
+services:
+  mariadb:
+    image: mariadb
+    container_name: mariadb_srv
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: ${MYSQL_CONFFILE}
+        target: /etc/mysql/mariadb.conf.d/99_db_server.cnf
+      - type: volume
+        source: mysql-data
+        target: /var/lib/mysql
+    ports:
+        - "3306:3306/tcp"
+    networks:
+      - mysql-net
+
+  gitea:
+    image: gitea/gitea
+    container_name: gitea
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - DB_TYPE=mysql
+      - DB_HOST=mariadb_srv:3306
+      - DB_NAME=gitea
+      - DB_USER=${MYSQL_GITEA_USER}
+      - DB_PASSWD=${MYSQL_GITEA_PASSWORD}
+      - DOMAIN=${GIT_FQDN}
+      - INSTALL_LOCK=true
+    restart: always
+    networks:
+      - mysql-net
+    volumes:
+      - gitea:/data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - mariadb
+
+  redis:
+    container_name: redis
+    image: "redis:alpine"
+    restart: unless-stopped
+    volumes:
+      - /srv/configs/redis:/usr/local/etc/redis
+      - redis_data:/var/lib/redis
+    networks:
+      - redis-net
+
+  nextcloud_app:
+    container_name: nextcloud
+    build: cloudserver/.
+    #image: nextcloud
+    restart: always
+    ports:
+      - 8090:80
+    volumes:
+       - /srv/nextcloud/data/data:/var/data
+       - /srv/nextcloud/data/data_local/Spielwiese:/var/nc_local/Spielwiese
+       - /srv/nextcloud/data/www:/var/www/html
+    environment:
+      #APACHE_DISABLE_REWRITE_IP: 0
+      TRUSTED_PROXIES: ${NEXTCLOUD_TRUSTED_PROXIES}
+      NEXTCLOUD_HOSTNAME: ${NEXTCLOUD_FQDN}
+      OVERWRITEHOST: ${NEXTCLOUD_FQDN}
+      OVERWRITEPROTOCOL: https
+    networks:
+      - mysql-net
+      - redis-net
+      - home-net
+    depends_on:
+      - mariadb
+      - redis
+      - samba
+
+  cron:
+    image: nextcloud:apache
+    restart: always
+    volumes:
+      - /srv/nextcloud/data/data:/var/data
+      - /srv/nextcloud/data/data_local:/var/nc_local
+      - /srv/nextcloud/data/www:/var/www/html
+    entrypoint: /cron.sh
+    depends_on:
+      - mariadb
+      - redis
+      - samba
+    networks:
+      - mysql-net
+      - redis-net
+
+  influxdb:
+    image: influxdb
+    container_name: influxdb
+    restart: always
+    ports:
+      - 8086:8086
+    networks:
+      - monitor-net
+    volumes:
+      - influxdb-data:/var/lib/influxdb
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    restart: always
+    ports:
+      - 3010:3000
+    networks:
+      - monitor-net
+      - mysql-net
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - influxdb
+
+  statping:
+    container_name: statping
+    image: statping/statping:dev
+    restart: always
+    volumes:
+      - statping_data:/app
+    environment:
+      DB_CONN: mysql
+      DB_HOST: mariadb
+      DB_USER: ${MYSQL_STATPING_USER}
+      DB_PASS: ${MYSQL_STATPING_PASSWORD}
+      DB_PORT: 3306
+      DB_DATABASE: statping
+    networks:
+      - mysql-net
+      - monitor-net
+    ports:
+      - 7080:8080
+
+  samba:
+    image: dperson/samba
+    container_name: samba_srv
+    environment:
+      TZ: 'Europe/Berlin'
+      mem_limit: 512m
+    networks:
+      - home-net
+    ports:
+      - "137:137/udp"
+      - "138:138/udp"
+      - "139:139/tcp"
+      - "445:445/tcp"
+    read_only: true
+    tmpfs:
+      - /tmp
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    volumes:
+      - /srv/homes/cardes/share:/share_cardes:z
+      - /srv/homes/rebekka/share:/share_rebekka:z
+      - /srv/smb/public:/share_public:z
+      - /srv/smb/games:/share_games:z
+      - /smb/portable:/share_portable:z
+    command: '-s ${SHARE_1} -s ${SHARE_2} -s ${SHARE_3} -s ${SHARE_4} -s ${SHARE_5} -s ${SHARE_6} -u ${USER_1} -u ${USER_2} -u ${USER_3} -p'
