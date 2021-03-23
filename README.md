@@ -1,3 +1,5 @@
+[![CodeFactor](https://www.codefactor.io/repository/github/cardes/homelab/badge)](https://www.codefactor.io/repository/github/cardes/homelab)
+
 # My Homelab is a work in progress
 
 Note: Please bear in mind that every script here is to be considered **unsafe** as I not only lack the knowledge necessary to build a safe infrastructure,
