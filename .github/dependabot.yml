@@ -1,0 +1,7 @@
+version: 2
+updates:
+- package-ecosystem: docker
+  directory: "/mainserver/cloudserver"
+  schedule:
+    interval: weekly
+  open-pull-requests-limit: 10
